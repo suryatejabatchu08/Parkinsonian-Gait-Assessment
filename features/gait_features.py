@@ -69,9 +69,20 @@ class GaitFeatureExtractor:
 
     @staticmethod
     def _smooth(signal: np.ndarray) -> np.ndarray:
-        """Apply Savitzky–Golay smoothing."""
+        """Apply Savitzky–Golay smoothing.
+        Handles NaN/Inf values by interpolating them first."""
         if len(signal) < SMOOTHING_WINDOW:
             return signal
+
+        # Replace NaN/Inf with interpolated values before smoothing
+        finite_mask = np.isfinite(signal)
+        if not np.all(finite_mask):
+            if np.sum(finite_mask) < 2:
+                # Too few valid points — return zeros
+                return np.zeros_like(signal)
+            indices = np.arange(len(signal))
+            signal = np.interp(indices, indices[finite_mask], signal[finite_mask])
+
         return savgol_filter(signal, SMOOTHING_WINDOW, SMOOTHING_POLY_ORDER)
 
     @staticmethod
@@ -86,6 +97,10 @@ class GaitFeatureExtractor:
     ) -> np.ndarray:
         """Shortcut to extract and smooth a landmark trajectory."""
         traj = estimator.extract_trajectory(keypoints, name)
+
+        # Safety: replace any remaining NaN/Inf with 0 before smoothing
+        traj = np.nan_to_num(traj, nan=0.0, posinf=0.0, neginf=0.0)
+
         traj[:, 0] = self._smooth(traj[:, 0])
         traj[:, 1] = self._smooth(traj[:, 1])
         return traj
