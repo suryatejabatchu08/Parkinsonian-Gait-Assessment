@@ -156,7 +156,7 @@ class VideoProcessor:
         frame = self.apply_clahe(frame)
         return frame
 
-    def preprocess_all(self, use_bg_subtraction: bool = False) -> List[np.ndarray]:
+    def preprocess_all(self, use_bg_subtraction: bool = True) -> List[np.ndarray]:
         """Run full preprocessing pipeline on all frames.
         Returns list of preprocessed BGR frames at TARGET_FPS.
 

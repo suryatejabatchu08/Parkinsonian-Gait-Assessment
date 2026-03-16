@@ -9,7 +9,7 @@ Each sub-score is normalised to [0, 100] where 100 = most impaired.
 
 import json
 import numpy as np
-from typing import Dict, Tuple, Optional
+from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
 import sys, os
@@ -132,8 +132,20 @@ class PGSIScorer:
     # ── fall risk ─────────────────────────────────
 
     @staticmethod
-    def assess_fall_risk(sub_scores: Dict[str, float]) -> Tuple[bool, list]:
-        reasons = []
+    def assess_fall_risk(
+        sub_scores: Dict[str, float],
+        severity: str = "Unknown",
+    ) -> Tuple[bool, List[str]]:
+        """Rule-based fall risk flag.
+
+        Only triggers for Moderate/Severe severity to avoid
+        false positives on Mild cases with noisy sub-scores.
+        """
+        # Normal and Mild patients should not be flagged for fall risk
+        if severity in ("Normal", "Mild"):
+            return False, []
+
+        reasons: List[str] = []
         if sub_scores.get("posture", 0) >= FALL_RISK_POSTURE_THRESHOLD:
             reasons.append(
                 f"Posture sub-score ({sub_scores['posture']:.1f}) exceeds threshold "
@@ -154,7 +166,7 @@ class PGSIScorer:
         sub_scores = self.compute_sub_scores(features)
         pgsi = self.compute_pgsi(sub_scores)
         severity = self.classify_severity(pgsi)
-        fall_risk, fall_reasons = self.assess_fall_risk(sub_scores)
+        fall_risk, fall_reasons = self.assess_fall_risk(sub_scores, severity)
 
         return PGSIResult(
             sub_scores=sub_scores,

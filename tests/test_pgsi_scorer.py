@@ -149,19 +149,19 @@ class TestFallRisk:
 
     def test_no_fall_risk(self):
         sub = {"posture": 30, "variability": 30, "stride": 30, "symmetry": 30, "armswing": 30}
-        risk, reasons = PGSIScorer.assess_fall_risk(sub)
+        risk, reasons = PGSIScorer.assess_fall_risk(sub, severity="Moderate")
         assert risk is False
         assert len(reasons) == 0
 
     def test_fall_risk_posture(self):
-        sub = {"posture": 70, "variability": 30, "stride": 30, "symmetry": 30, "armswing": 30}
-        risk, reasons = PGSIScorer.assess_fall_risk(sub)
+        sub = {"posture": 80, "variability": 30, "stride": 30, "symmetry": 30, "armswing": 30}
+        risk, reasons = PGSIScorer.assess_fall_risk(sub, severity="Severe")
         assert risk is True
         assert any("Posture" in r for r in reasons)
 
     def test_fall_risk_variability(self):
-        sub = {"posture": 30, "variability": 70, "stride": 30, "symmetry": 30, "armswing": 30}
-        risk, reasons = PGSIScorer.assess_fall_risk(sub)
+        sub = {"posture": 30, "variability": 80, "stride": 30, "symmetry": 30, "armswing": 30}
+        risk, reasons = PGSIScorer.assess_fall_risk(sub, severity="Severe")
         assert risk is True
         assert any("Variability" in r for r in reasons)
 

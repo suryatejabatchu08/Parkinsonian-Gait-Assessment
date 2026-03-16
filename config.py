@@ -85,8 +85,8 @@ SEVERITY_BINS = {
 # ──────────────────────────────────────────────
 # Fall Risk
 # ──────────────────────────────────────────────
-FALL_RISK_POSTURE_THRESHOLD = 60   # Sub-score above this triggers risk
-FALL_RISK_VARIABILITY_THRESHOLD = 60
+FALL_RISK_POSTURE_THRESHOLD = 70   # Sub-score above this triggers risk
+FALL_RISK_VARIABILITY_THRESHOLD = 70
 
 # ──────────────────────────────────────────────
 # Supported video formats

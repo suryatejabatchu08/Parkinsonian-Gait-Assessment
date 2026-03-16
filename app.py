@@ -171,7 +171,7 @@ if page == "📤 Upload":
                 # Stage 1: Preprocessing
                 progress.progress(10, "Stage 1/5: Preprocessing video...")
                 vp = VideoProcessor(st.session_state.video_path)
-                frames = vp.preprocess_all()
+                frames = vp.preprocess_all(use_bg_subtraction=True)
                 st.session_state.frames = frames
                 vp.release()
 
