@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>PGSI Clinical Report</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 40px;
+            color: #2c3e50;
+            line-height: 1.6;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .header .subtitle {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        .section {
+            margin-bottom: 25px;
+        }
+        .section h2 {
+            color: #3498db;
+            border-bottom: 1px solid #bdc3c7;
+            padding-bottom: 5px;
+        }
+        .metadata-table, .score-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .metadata-table td, .score-table td, .score-table th {
+            border: 1px solid #bdc3c7;
+            padding: 8px 12px;
+        }
+        .metadata-table td:first-child {
+            font-weight: bold;
+            width: 200px;
+            background-color: #ecf0f1;
+        }
+        .score-table th {
+            background-color: #3498db;
+            color: white;
+            text-align: left;
+        }
+        .severity-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 5px;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+        }
+        .severity-Normal { background-color: #2ecc71; }
+        .severity-Mild { background-color: #f1c40f; color: #2c3e50; }
+        .severity-Moderate { background-color: #e67e22; }
+        .severity-Severe { background-color: #e74c3c; }
+        .pgsi-score {
+            font-size: 48px;
+            font-weight: bold;
+            color: #2c3e50;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .fall-risk-yes {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .fall-risk-no {
+            color: #2ecc71;
+            font-weight: bold;
+        }
+        .chart-container {
+            text-align: center;
+            margin: 15px 0;
+        }
+        .chart-container img {
+            max-width: 100%;
+            height: auto;
+        }
+        .interpretation {
+            background-color: #eaf2f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 15px;
+            border-top: 1px solid #bdc3c7;
+            color: #95a5a6;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>PGSI Clinical Assessment Report</h1>
+    <div class="subtitle">Parkinsonian Gait Severity Index — Vision-Based Quantitative Assessment</div>
+</div>
+
+<!-- Patient / Session Metadata -->
+<div class="section">
+    <h2>Session Information</h2>
+    <table class="metadata-table">
+        <tr><td>Patient ID</td><td>{{ patient_id }}</td></tr>
+        <tr><td>Session Date</td><td>{{ session_date }}</td></tr>
+        <tr><td>Session Tag</td><td>{{ session_tag }}</td></tr>
+        <tr><td>Video File</td><td>{{ video_filename }}</td></tr>
+        <tr><td>Video Duration</td><td>{{ video_duration }}</td></tr>
+        <tr><td>Analysis Timestamp</td><td>{{ analysis_timestamp }}</td></tr>
+    </table>
+</div>
+
+<!-- PGSI Score + Severity -->
+<div class="section">
+    <h2>PGSI Assessment Result</h2>
+    <div class="pgsi-score">{{ pgsi_score }}</div>
+    <div style="text-align: center;">
+        <span class="severity-badge severity-{{ severity_label }}">{{ severity_label }}</span>
+    </div>
+</div>
+
+<!-- Sub-Score Breakdown -->
+<div class="section">
+    <h2>Sub-Score Breakdown</h2>
+    <table class="score-table">
+        <tr>
+            <th>Feature</th>
+            <th>Raw Value</th>
+            <th>Normalized Score (0–100)</th>
+            <th>Weight</th>
+        </tr>
+        {% for feature in features %}
+        <tr>
+            <td>{{ feature.name }}</td>
+            <td>{{ feature.raw_value }}</td>
+            <td>{{ feature.sub_score }}</td>
+            <td>{{ feature.weight }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<!-- Fall Risk -->
+<div class="section">
+    <h2>Fall Risk Assessment</h2>
+    {% if fall_risk %}
+    <p class="fall-risk-yes">⚠ ELEVATED FALL RISK DETECTED</p>
+    <ul>
+        {% for reason in fall_risk_reasons %}
+        <li>{{ reason }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="fall-risk-no">✓ Fall risk within normal range</p>
+    {% endif %}
+</div>
+
+<!-- Skeleton Snapshot -->
+{% if skeleton_image_b64 %}
+<div class="section">
+    <h2>Pose Skeleton Snapshot</h2>
+    <div class="chart-container">
+        <img src="data:image/png;base64,{{ skeleton_image_b64 }}" alt="Pose Skeleton">
+    </div>
+</div>
+{% endif %}
+
+<!-- Clinical Interpretation -->
+<div class="section">
+    <h2>Clinical Interpretation</h2>
+    <div class="interpretation">
+        {{ interpretation }}
+    </div>
+</div>
+
+<!-- Longitudinal Trend -->
+{% if longitudinal_data %}
+<div class="section">
+    <h2>Longitudinal Trend</h2>
+    <table class="score-table">
+        <tr>
+            <th>Session</th>
+            <th>Date</th>
+            <th>PGSI Score</th>
+            <th>Severity</th>
+        </tr>
+        {% for session in longitudinal_data %}
+        <tr>
+            <td>{{ session.label }}</td>
+            <td>{{ session.date }}</td>
+            <td>{{ session.pgsi }}</td>
+            <td>{{ session.severity }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
+<div class="footer">
+    <p>Generated by PGSI System v1.0 — Vision-Based Quantitative Parkinsonian Gait Assessment</p>
+    <p>This report is auto-generated and intended to support clinical decision-making. Not a standalone diagnostic.</p>
+</div>
+
+</body>
+</html>
