@@ -82,8 +82,8 @@ def _download_model_if_needed(model_path: str) -> str:
     os.makedirs(os.path.dirname(model_path), exist_ok=True)
     url = (
         "https://storage.googleapis.com/mediapipe-models/"
-        "pose_landmarker/pose_landmarker_lite/float16/latest/"
-        "pose_landmarker_lite.task"
+        "pose_landmarker/pose_landmarker_heavy/float16/latest/"
+        "pose_landmarker_heavy.task"
     )
     print(f"[PGSI] Downloading PoseLandmarker model to {model_path} ...")
     import urllib.request

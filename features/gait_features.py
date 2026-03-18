@@ -98,8 +98,22 @@ class GaitFeatureExtractor:
         """Shortcut to extract and smooth a landmark trajectory."""
         traj = estimator.extract_trajectory(keypoints, name)
 
-        # Safety: replace any remaining NaN/Inf with 0 before smoothing
-        traj = np.nan_to_num(traj, nan=0.0, posinf=0.0, neginf=0.0)
+        # Check how many frames have valid (non-NaN) data
+        valid_mask = ~np.isnan(traj[:, 0])
+        valid_count = np.sum(valid_mask)
+
+        if valid_count < 2:
+            # Too few valid points — return zeros
+            return np.zeros_like(traj)
+
+        # Interpolate any remaining NaN gaps (extract_trajectory already does this,
+        # but safety net for edge cases)
+        for col in range(2):
+            nans = np.isnan(traj[:, col])
+            if np.any(nans):
+                indices = np.arange(len(traj))
+                valid = ~nans
+                traj[:, col] = np.interp(indices, indices[valid], traj[valid, col])
 
         traj[:, 0] = self._smooth(traj[:, 0])
         traj[:, 1] = self._smooth(traj[:, 1])
@@ -125,6 +139,7 @@ class GaitFeatureExtractor:
         left_y = left_ankle_traj[:, 1]
         right_y = right_ankle_traj[:, 1]
 
+        # Use the global constants for peak detection
         left_peaks, _ = find_peaks(
             left_y, distance=PEAK_MIN_DISTANCE_FRAMES, prominence=PEAK_PROMINENCE
         )
@@ -180,6 +195,23 @@ class GaitFeatureExtractor:
             height_proxy = (h1 + h2) / 2.0
             if height_proxy > 0:
                 strides.append(dist / height_proxy)
+
+        if not strides:
+            # Fallback: estimate stride from total ankle displacement
+            # This handles cases where peak detection fails
+            total_left = self._euclidean(left_ankle[0], left_ankle[-1])
+            total_right = self._euclidean(right_ankle[0], right_ankle[-1])
+            avg_disp = (total_left + total_right) / 2.0
+            # Normalize by average leg length
+            h_left = np.mean([self._euclidean(left_hip[i], left_ankle[i]) for i in range(len(left_ankle))])
+            h_right = np.mean([self._euclidean(right_hip[i], right_ankle[i]) for i in range(len(right_ankle))])
+            height_proxy = (h_left + h_right) / 2.0
+            if height_proxy > 0 and avg_disp > 0:
+                # Estimate number of steps from video duration
+                n_frames = len(left_ankle)
+                est_steps = max(1, n_frames / (self.fps * 0.5))  # ~2 steps per second
+                stride_est = (avg_disp / est_steps) / height_proxy
+                return np.array([stride_est])
 
         return np.array(strides) if strides else np.array([0.0])
 
@@ -317,9 +349,21 @@ class GaitFeatureExtractor:
         left_angles = _arm_angle_series(ls, le, lw)
         right_angles = _arm_angle_series(rs, re, rw)
 
-        # Angular excursion = max - min over sliding windows
-        left_swing = float(np.ptp(left_angles)) if len(left_angles) > 0 else 0.0
-        right_swing = float(np.ptp(right_angles)) if len(right_angles) > 0 else 0.0
+        # Angular excursion = peak-to-peak range
+        # Filter out frames where trajectories were all zeros (undetected)
+        left_valid = left_angles[np.isfinite(left_angles)]
+        right_valid = right_angles[np.isfinite(right_angles)]
+
+        if len(left_valid) > 5:
+            # Use interquartile range to be robust against outliers
+            left_swing = float(np.percentile(left_valid, 95) - np.percentile(left_valid, 5))
+        else:
+            left_swing = 0.0
+
+        if len(right_valid) > 5:
+            right_swing = float(np.percentile(right_valid, 95) - np.percentile(right_valid, 5))
+        else:
+            right_swing = 0.0
 
         return left_swing, right_swing
 

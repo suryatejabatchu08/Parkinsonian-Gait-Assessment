@@ -28,9 +28,9 @@ BG_SUBTRACTOR_THRESHOLD = 16
 # Pose Estimation
 # ──────────────────────────────────────────────
 POSE_MODEL = "mediapipe"   # "mediapipe" or "openpose"
-MEDIAPIPE_MIN_DETECTION_CONFIDENCE = 0.5
-MEDIAPIPE_MIN_TRACKING_CONFIDENCE = 0.5
-VISIBILITY_THRESHOLD = 0.5  # Min visibility to trust a keypoint
+MEDIAPIPE_MIN_DETECTION_CONFIDENCE = 0.3
+MEDIAPIPE_MIN_TRACKING_CONFIDENCE = 0.3
+VISIBILITY_THRESHOLD = 0.3  # Min visibility to trust a keypoint
 
 # Path to the MediaPipe PoseLandmarker .task model file
 # Download from: https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker
@@ -60,7 +60,7 @@ LANDMARKS = {
 SMOOTHING_WINDOW = 5          # Savitzky–Golay window for signal smoothing
 SMOOTHING_POLY_ORDER = 2
 PEAK_MIN_DISTANCE_FRAMES = 10 # Minimum distance between detected heel strikes
-PEAK_PROMINENCE = 0.05        # Prominence for scipy.signal.find_peaks
+PEAK_PROMINENCE = 0.02        # Prominence for scipy.signal.find_peaks (lowered for side-view)
 
 # ──────────────────────────────────────────────
 # PGSI Scoring

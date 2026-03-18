@@ -151,18 +151,26 @@ class VideoProcessor:
         return frame[y : y + h, x : x + w]
 
     def preprocess_frame(self, frame: np.ndarray) -> np.ndarray:
-        """Full single-frame preprocessing: resize → CLAHE → return."""
+        """Full single-frame preprocessing: resize → denoise → CLAHE → sharpen."""
         frame = self.resize_frame(frame)
+        # Denoise to reduce video compression artifacts and blur
+        # Args: src, dst, h, hColor, templateWindowSize, searchWindowSize
+        frame = cv2.fastNlMeansDenoisingColored(frame, None, 3, 3, 7, 21)
         frame = self.apply_clahe(frame)
+        # Sharpen to recover edge detail after denoising
+        blur = cv2.GaussianBlur(frame, (0, 0), 3)
+        frame = cv2.addWeighted(frame, 1.5, blur, -0.5, 0)
         return frame
 
-    def preprocess_all(self, use_bg_subtraction: bool = True) -> List[np.ndarray]:
+    def preprocess_all(self, use_bg_subtraction: bool = False) -> List[np.ndarray]:
         """Run full preprocessing pipeline on all frames.
         Returns list of preprocessed BGR frames at TARGET_FPS.
 
         Args:
-            use_bg_subtraction: If True, apply MOG2 background subtraction
-                and crop frames to the detected subject bounding box.
+            use_bg_subtraction: If True, apply MOG2 background subtraction.
+                Instead of cropping (which destroys frame consistency),
+                the background is masked to black, keeping frame dimensions
+                stable for pose estimation.
         """
         raw_frames = self.extract_frames(normalize_fps=True)
         processed: List[np.ndarray] = []
@@ -170,9 +178,9 @@ class VideoProcessor:
             frame = self.preprocess_frame(frame)
             if use_bg_subtraction:
                 fg_mask = self.subtract_background(frame)
-                bbox = self.get_subject_bbox(fg_mask)
-                if bbox is not None:
-                    frame = self.crop_to_subject(frame, bbox)
+                # Mask background to black instead of cropping —
+                # keeps consistent frame dimensions for pose estimation
+                frame = cv2.bitwise_and(frame, frame, mask=fg_mask)
             processed.append(frame)
         return processed
 

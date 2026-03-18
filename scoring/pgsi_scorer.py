@@ -40,7 +40,7 @@ REFERENCE_RANGES = {
         "impaired_max": 30.0,  # high variability
     },
     "armswing": {
-        "healthy_min": 40.0,   # full swing (degrees)
+        "healthy_min": 80.0,   # full swing (degrees) — widened for percentile-based calculation
         "impaired_max": 5.0,   # almost no swing
     },
 }
@@ -124,10 +124,14 @@ class PGSIScorer:
 
     @staticmethod
     def classify_severity(pgsi: float) -> str:
-        for label, (lo, hi) in SEVERITY_BINS.items():
-            if lo <= pgsi <= hi:
-                return label
-        return "Severe"  # fallback if score > 100 somehow
+        if pgsi <= 25:
+            return "Normal"
+        elif pgsi <= 50:
+            return "Mild"
+        elif pgsi <= 75:
+            return "Moderate"
+        else:
+            return "Severe"
 
     # ── fall risk ─────────────────────────────────
 
