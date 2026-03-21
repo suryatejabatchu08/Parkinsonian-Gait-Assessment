@@ -1,0 +1,64 @@
+======================================================================
+ PGSI RESULTS — Research Paper Summary
+======================================================================
+
+1. DATASET
+   Total subjects: N = 87
+   Normal: n = 59
+   Mild: n = 12
+   Moderate: n = 14
+   Severe: n = 2
+
+2. PGSI SCORES (mean ± SD)
+   Normal      : 31.2 ± 11.3  (range: 13.6–55.6)
+   Mild        : 59.7 ± 8.4  (range: 45.9–70.6)
+   Moderate    : 64.3 ± 4.9  (range: 53.7–70.8)
+   Severe      : 69.2 ± 6.0  (range: 64.9–73.4)
+
+3. STATISTICAL SIGNIFICANCE
+   Kruskal-Wallis (PGSI): H = 53.921, p <0.001
+   Pairwise Mann-Whitney U (Bonferroni corrected):
+     Normal_vs_Mild           : U=20.0, p=<0.001 ***
+     Normal_vs_Moderate       : U=2.0, p=<0.001 ***
+     Normal_vs_Severe         : U=0.0, p=0.0066 ***
+     Mild_vs_Moderate         : U=58.0, p=1.0000 ns
+     Mild_vs_Severe           : U=4.0, p=1.0000 ns
+     Moderate_vs_Severe       : U=7.0, p=1.0000 ns
+
+4. CLASSIFICATION PERFORMANCE
+   Overall accuracy: 58.6%
+   Class         Precision     Recall   F1-Score    Support
+   Normal             1.00       0.58       0.73         59
+   Mild               0.16       0.42       0.23         12
+   Moderate           0.57       0.86       0.69         14
+   Severe             0.00       0.00       0.00          2
+
+5. SINGLE-FEATURE vs COMPOSITE COMPARISON
+   Feature                     Accuracy
+   stride_length                 100.0%
+   posture_angle                  67.8%
+   step_timing_cv                 67.8%
+   gait_symmetry (excluded)       67.8%
+   arm_swing (excluded)           67.8%
+   pgsi_3feature_composite        58.6%
+
+6. RAW FEATURES BY GROUP (mean ± SD)
+   [Active features used in PGSI]
+   Feature                                Normal                Mild            Moderate              Severe
+   Stride Length                 0.53 ± 0.14       0.22 ± 0.05       0.18 ± 0.04       0.12 ± 0.00  
+   Posture Angle (°)             5.71 ± 1.79       4.90 ± 1.90       5.30 ± 1.53       8.99 ± 0.91  
+   Step Timing CV (%)           65.88 ± 16.53     72.02 ± 11.20     76.62 ± 12.70     67.96 ± 11.14 
+
+   [Excluded features — not used in PGSI]
+   Symmetry Index (%)           79.61 ± 49.34     57.42 ± 40.32     49.65 ± 20.87     27.30 ± 14.62 
+   Arm Swing (°)                59.41 ± 24.38     83.43 ± 30.91     76.95 ± 26.41     95.06 ± 3.39  
+   Reason: unreliable from sagittal monocular video
+   (perspective occlusion prevents bilateral limb discrimination)
+
+7. FALL RISK
+   Flagged: 12/16 Moderate+Severe patients
+
+8. DATA QUALITY
+   Mean frame detection rate: 25.6% ± 3.3%
+
+======================================================================

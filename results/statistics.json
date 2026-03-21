@@ -1,0 +1,94 @@
+{
+  "stride_length_sub": {
+    "H_statistic": 58.258,
+    "p_value": 1.3844776700611817e-12,
+    "p_value_formatted": "<0.001",
+    "significant": true,
+    "excluded_from_pgsi": false
+  },
+  "posture_angle_sub": {
+    "H_statistic": 5.847,
+    "p_value": 0.11928219775529164,
+    "p_value_formatted": "0.1193",
+    "significant": false,
+    "excluded_from_pgsi": false
+  },
+  "step_timing_cv_sub": {
+    "H_statistic": 7.069,
+    "p_value": 0.06974198108337898,
+    "p_value_formatted": "0.0697",
+    "significant": false,
+    "excluded_from_pgsi": false
+  },
+  "pgsi": {
+    "H_statistic": 53.921,
+    "p_value": 1.1666702267415421e-11,
+    "p_value_formatted": "<0.001",
+    "significant": true,
+    "excluded_from_pgsi": false
+  },
+  "gait_symmetry_sub": {
+    "H_statistic": NaN,
+    "p_value": NaN,
+    "p_value_formatted": "nan",
+    "significant": false,
+    "excluded_from_pgsi": true
+  },
+  "arm_swing_sub": {
+    "H_statistic": NaN,
+    "p_value": NaN,
+    "p_value_formatted": "nan",
+    "significant": false,
+    "excluded_from_pgsi": true
+  },
+  "pairwise_pgsi": {
+    "Normal_vs_Mild": {
+      "U_statistic": 20.0,
+      "p_value_uncorrected": 3.106630727809244e-07,
+      "p_value_bonferroni": 1.8639784366855463e-06,
+      "p_value_formatted": "<0.001",
+      "significant_bonferroni": true,
+      "effect_size_r": 0.028
+    },
+    "Normal_vs_Moderate": {
+      "U_statistic": 2.0,
+      "p_value_uncorrected": 8.833888259745658e-09,
+      "p_value_bonferroni": 5.3003329558473946e-08,
+      "p_value_formatted": "<0.001",
+      "significant_bonferroni": true,
+      "effect_size_r": 0.002
+    },
+    "Normal_vs_Severe": {
+      "U_statistic": 0.0,
+      "p_value_uncorrected": 0.001092896174863388,
+      "p_value_bonferroni": 0.006557377049180328,
+      "p_value_formatted": "0.0066",
+      "significant_bonferroni": true,
+      "effect_size_r": 0.0
+    },
+    "Mild_vs_Moderate": {
+      "U_statistic": 58.0,
+      "p_value_uncorrected": 0.18966239976414567,
+      "p_value_bonferroni": 1.0,
+      "p_value_formatted": "1.0000",
+      "significant_bonferroni": false,
+      "effect_size_r": 0.345
+    },
+    "Mild_vs_Severe": {
+      "U_statistic": 4.0,
+      "p_value_uncorrected": 0.19780219780219782,
+      "p_value_bonferroni": 1.0,
+      "p_value_formatted": "1.0000",
+      "significant_bonferroni": false,
+      "effect_size_r": 0.167
+    },
+    "Moderate_vs_Severe": {
+      "U_statistic": 7.0,
+      "p_value_uncorrected": 0.3333333333333333,
+      "p_value_bonferroni": 1.0,
+      "p_value_formatted": "1.0000",
+      "significant_bonferroni": false,
+      "effect_size_r": 0.25
+    }
+  }
+}

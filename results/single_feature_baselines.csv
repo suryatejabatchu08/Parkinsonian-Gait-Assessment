@@ -1,0 +1,7 @@
+feature,best_threshold,binary_accuracy_pct
+stride_length,51.8,100.0
+posture_angle,17.1,67.8
+step_timing_cv,82.9,67.8
+gait_symmetry (excluded),0.5,67.8
+arm_swing (excluded),0.5,67.8
+pgsi_3feature_composite,N/A (multi-class),58.6

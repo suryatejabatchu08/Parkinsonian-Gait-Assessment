@@ -151,16 +151,9 @@ class VideoProcessor:
         return frame[y : y + h, x : x + w]
 
     def preprocess_frame(self, frame: np.ndarray) -> np.ndarray:
-        """Full single-frame preprocessing: resize → denoise → CLAHE → sharpen."""
-        frame = self.resize_frame(frame)
-        # Denoise to reduce video compression artifacts and blur
-        # Args: src, dst, h, hColor, templateWindowSize, searchWindowSize
-        frame = cv2.fastNlMeansDenoisingColored(frame, None, 3, 3, 7, 21)
-        frame = self.apply_clahe(frame)
-        # Sharpen to recover edge detail after denoising
-        blur = cv2.GaussianBlur(frame, (0, 0), 3)
-        frame = cv2.addWeighted(frame, 1.5, blur, -0.5, 0)
-        return frame
+        """Resize frame only. Denoising removed — adds 1-3s per frame
+        and MediaPipe does not need denoised input for pose detection."""
+        return self.resize_frame(frame)
 
     def preprocess_all(self, use_bg_subtraction: bool = False) -> List[np.ndarray]:
         """Run full preprocessing pipeline on all frames.

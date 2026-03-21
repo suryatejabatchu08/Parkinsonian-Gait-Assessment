@@ -224,25 +224,32 @@ class GaitFeatureExtractor:
         estimator: PoseEstimator,
         keypoints: List[Optional[KeypointFrame]],
     ) -> np.ndarray:
-        """Compute per-frame forward trunk tilt angle (degrees).
-        Angle between shoulder-midpoint→hip-midpoint vector and vertical axis."""
-
+        """Posture angle using near-side landmarks only (sagittal view).
+        Pick the side with higher mean visibility across the sequence."""
         ls = self._get_trajectory(estimator, keypoints, "left_shoulder")
         rs = self._get_trajectory(estimator, keypoints, "right_shoulder")
         lh = self._get_trajectory(estimator, keypoints, "left_hip")
         rh = self._get_trajectory(estimator, keypoints, "right_hip")
 
-        shoulder_mid = (ls + rs) / 2.0
-        hip_mid = (lh + rh) / 2.0
+        # Determine which side is more visible across the full sequence
+        left_vis  = np.mean([kf.landmarks.get("left_shoulder",  (0,0,0,0))[3]
+                             for kf in keypoints if kf is not None])
+        right_vis = np.mean([kf.landmarks.get("right_shoulder", (0,0,0,0))[3]
+                             for kf in keypoints if kf is not None])
 
-        # Vector from hip midpoint to shoulder midpoint
-        trunk_vec = shoulder_mid - hip_mid  # (N, 2): [dx, dy]
+        if left_vis >= right_vis:
+            shoulder_traj = ls
+            hip_traj      = lh
+        else:
+            shoulder_traj = rs
+            hip_traj      = rh
 
-        # Vertical axis in image coords (pointing upward) = [0, -1]
-        # Angle between trunk vector and vertical
-        angles = np.degrees(np.arctan2(trunk_vec[:, 0], -trunk_vec[:, 1]))
-        angles = np.abs(angles)  # absolute tilt
-
+        # Vector from hip to shoulder
+        spine_dx = shoulder_traj[:, 0] - hip_traj[:, 0]
+        spine_dy = shoulder_traj[:, 1] - hip_traj[:, 1]
+        # Angle from vertical (0 = upright, positive = forward lean)
+        angles = np.abs(np.degrees(np.arctan2(np.abs(spine_dx),
+                                              np.maximum(np.abs(spine_dy), 1e-6))))
         return self._smooth(angles)
 
     # ═══════════════════════════════════════════════
@@ -349,23 +356,30 @@ class GaitFeatureExtractor:
         left_angles = _arm_angle_series(ls, le, lw)
         right_angles = _arm_angle_series(rs, re, rw)
 
-        # Angular excursion = peak-to-peak range
-        # Filter out frames where trajectories were all zeros (undetected)
-        left_valid = left_angles[np.isfinite(left_angles)]
-        right_valid = right_angles[np.isfinite(right_angles)]
+        # Near-side arm only — far side occluded in sagittal view
+        # Cap at 120° — anything above is a caretaker detection artifact
+        left_valid  = left_angles[(np.isfinite(left_angles)) & (left_angles <= 120.0)]
+        right_valid = right_angles[(np.isfinite(right_angles)) & (right_angles <= 120.0)]
 
-        if len(left_valid) > 5:
-            # Use interquartile range to be robust against outliers
-            left_swing = float(np.percentile(left_valid, 95) - np.percentile(left_valid, 5))
+        # Compute swing for each side
+        left_swing  = float(np.percentile(left_valid,  95) - np.percentile(left_valid,  5)) if len(left_valid)  > 5 else 0.0
+        right_swing = float(np.percentile(right_valid, 95) - np.percentile(right_valid, 5)) if len(right_valid) > 5 else 0.0
+
+        # Pick only the near-side arm — the one with larger detected visibility
+        # (also the one less likely to be occluded)
+        left_mean_vis  = np.mean([kf.landmarks.get("left_elbow",  (0,0,0,0))[3]
+                                  for kf in keypoints if kf is not None])
+        right_mean_vis = np.mean([kf.landmarks.get("right_elbow", (0,0,0,0))[3]
+                                  for kf in keypoints if kf is not None])
+
+        if left_mean_vis >= right_mean_vis:
+            near_swing = left_swing
+            far_swing  = 0.0
         else:
-            left_swing = 0.0
+            near_swing = right_swing
+            far_swing  = 0.0
 
-        if len(right_valid) > 5:
-            right_swing = float(np.percentile(right_valid, 95) - np.percentile(right_valid, 5))
-        else:
-            right_swing = 0.0
-
-        return left_swing, right_swing
+        return near_swing, far_swing
 
     # ═══════════════════════════════════════════════
     # Master extraction method

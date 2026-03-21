@@ -28,13 +28,16 @@ BG_SUBTRACTOR_THRESHOLD = 16
 # Pose Estimation
 # ──────────────────────────────────────────────
 POSE_MODEL = "mediapipe"   # "mediapipe" or "openpose"
-MEDIAPIPE_MIN_DETECTION_CONFIDENCE = 0.3
-MEDIAPIPE_MIN_TRACKING_CONFIDENCE = 0.3
-VISIBILITY_THRESHOLD = 0.3  # Min visibility to trust a keypoint
+MEDIAPIPE_MIN_DETECTION_CONFIDENCE = 0.4
+MEDIAPIPE_MIN_TRACKING_CONFIDENCE = 0.4
+VISIBILITY_THRESHOLD = 0.05  # Very low — accept all detected landmarks for trajectory extraction
 
-# Path to the MediaPipe PoseLandmarker .task model file
-# Download from: https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker
-POSE_MODEL_PATH = os.path.join(ROOT_DIR, "data", "pose_landmarker.task")
+# Only require shoulders + hips — far-side limbs always occluded in sagittal view
+REQUIRED_LANDMARKS = [11, 12, 23, 24]
+
+# Use mp.solutions.pose — NOT Tasks API (requires no model file download)
+# Pin mediapipe==0.10.14 (last version with solutions API)
+POSE_MODEL_PATH = ""   # unused — kept for backward compatibility
 
 # MediaPipe landmark indices used for PGSI features
 LANDMARKS = {
@@ -59,27 +62,42 @@ LANDMARKS = {
 # ──────────────────────────────────────────────
 SMOOTHING_WINDOW = 5          # Savitzky–Golay window for signal smoothing
 SMOOTHING_POLY_ORDER = 2
-PEAK_MIN_DISTANCE_FRAMES = 10 # Minimum distance between detected heel strikes
-PEAK_PROMINENCE = 0.02        # Prominence for scipy.signal.find_peaks (lowered for side-view)
+PEAK_MIN_DISTANCE_FRAMES = 5  # Minimum distance between detected heel strikes
+PEAK_PROMINENCE = 0.008       # Prominence for scipy.signal.find_peaks
 
 # ──────────────────────────────────────────────
 # PGSI Scoring
 # ──────────────────────────────────────────────
-# Default weights (equal until optimized against UPDRS data)
 PGSI_WEIGHTS = {
-    "stride":     0.20,
-    "posture":    0.20,
-    "symmetry":   0.20,
-    "variability": 0.20,
-    "armswing":   0.20,
+    "stride":      0.40,   # strongest discriminator
+    "posture":     0.25,
+    "variability": 0.35,
+    # symmetry and armswing removed — unreliable from sagittal monocular video
 }
 
 # Severity thresholds on the 0-100 PGSI scale
 SEVERITY_BINS = {
-    "Normal":   (0, 25),
-    "Mild":     (26, 50),
-    "Moderate": (51, 75),
-    "Severe":   (76, 100),
+    "Normal":   (0, 33),
+    "Mild":     (34, 58),
+    "Moderate": (59, 78),
+    "Severe":   (79, 100),
+}
+
+# Reference values for normalization (used by pgsi_scorer.py)
+PGSI_HEALTHY_REF = {
+    "stride":      0.55,
+    "posture":     5.0,
+    "variability": 15.0,
+}
+PGSI_IMPAIRED_REF = {
+    "stride":      0.12,
+    "posture":     40.0,
+    "variability": 85.0,
+}
+PGSI_HIGHER_IS_WORSE = {
+    "stride":      False,
+    "posture":     True,
+    "variability": True,
 }
 
 # ──────────────────────────────────────────────

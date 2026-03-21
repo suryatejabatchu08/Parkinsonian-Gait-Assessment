@@ -2,7 +2,10 @@
 pgsi_scorer.py — Stage 4: PGSI Computation & Severity Classification
 
 Computes the Parkinsonian Gait Severity Index:
-    PGSI = w₁·S_stride + w₂·S_posture + w₃·S_symmetry + w₄·S_variability + w₅·S_armswing
+    PGSI = w₁·S_stride + w₂·S_posture + w₃·S_variability
+
+Only 3 features are used — symmetry and arm swing are unreliable from
+sagittal monocular video and are excluded from the composite score.
 
 Each sub-score is normalised to [0, 100] where 100 = most impaired.
 """
@@ -14,36 +17,16 @@ from dataclasses import dataclass
 
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import PGSI_WEIGHTS, SEVERITY_BINS, FALL_RISK_POSTURE_THRESHOLD, FALL_RISK_VARIABILITY_THRESHOLD
+from config import (
+    PGSI_WEIGHTS,
+    PGSI_HEALTHY_REF,
+    PGSI_IMPAIRED_REF,
+    PGSI_HIGHER_IS_WORSE,
+    SEVERITY_BINS,
+    FALL_RISK_POSTURE_THRESHOLD,
+    FALL_RISK_VARIABILITY_THRESHOLD,
+)
 from features.gait_features import GaitFeatures
-
-
-# ─────────────────────────────────────────────────
-# Reference ranges for min-max normalization
-# (derived from literature / healthy baselines)
-# ─────────────────────────────────────────────────
-REFERENCE_RANGES = {
-    "stride": {
-        "healthy_min": 1.0,    # normalised stride length (good)
-        "impaired_max": 0.2,   # short festinating strides (bad)
-    },
-    "posture": {
-        "healthy_min": 0.0,    # upright (degrees)
-        "impaired_max": 45.0,  # severe camptocormia (degrees)
-    },
-    "symmetry": {
-        "healthy_min": 0.0,    # perfect symmetry (SI %)
-        "impaired_max": 50.0,  # severe asymmetry
-    },
-    "variability": {
-        "healthy_min": 0.0,    # no variability (CV %)
-        "impaired_max": 30.0,  # high variability
-    },
-    "armswing": {
-        "healthy_min": 80.0,   # full swing (degrees) — widened for percentile-based calculation
-        "impaired_max": 5.0,   # almost no swing
-    },
-}
 
 
 @dataclass
@@ -71,34 +54,31 @@ class PGSIScorer:
     # ── normalization ─────────────────────────────
 
     @staticmethod
-    def _normalize_sub_score(
-        value: float, healthy_val: float, impaired_val: float
-    ) -> float:
-        """Min-max normalize a raw feature to [0, 100].
-        0 = healthy, 100 = most impaired.
-        Handles both increasing and decreasing features."""
-        if healthy_val == impaired_val:
-            return 0.0
-
-        # Determine direction
-        if healthy_val < impaired_val:
-            # Higher value = more impaired (e.g., posture angle, symmetry, variability)
-            score = (value - healthy_val) / (impaired_val - healthy_val) * 100
+    def _normalize(value: float, feature: str) -> float:
+        """Map raw feature value to 0-100 sub-score.
+        0 = healthy, 100 = maximally impaired."""
+        h = PGSI_HEALTHY_REF[feature]
+        i = PGSI_IMPAIRED_REF[feature]
+        if PGSI_HIGHER_IS_WORSE[feature]:
+            raw = (value - h) / (i - h) * 100.0
         else:
-            # Lower value = more impaired (e.g., stride length, arm swing)
-            score = (healthy_val - value) / (healthy_val - impaired_val) * 100
-
-        return float(np.clip(score, 0, 100))
+            raw = (h - value) / (h - i) * 100.0
+        return float(np.clip(raw, 0.0, 100.0))
 
     def compute_sub_scores(self, features: GaitFeatures) -> Dict[str, float]:
         """Normalize each feature to a [0, 100] sub-score."""
         raw = self._extract_raw_values(features)
 
         sub_scores = {}
-        for key, ref in REFERENCE_RANGES.items():
-            sub_scores[key] = self._normalize_sub_score(
-                raw[key], ref["healthy_min"], ref["impaired_max"]
-            )
+        # Only normalize the 3 active features
+        for key in PGSI_WEIGHTS:
+            sub_scores[key] = self._normalize(raw[key], key)
+
+        # Keep symmetry and armswing in dict for display (dashboard radar chart)
+        # but set to 0.0 since they are excluded from the PGSI composite
+        sub_scores["symmetry"] = 0.0
+        sub_scores["armswing"] = 0.0
+
         return sub_scores
 
     @staticmethod
@@ -114,7 +94,7 @@ class PGSIScorer:
     # ── PGSI formula ──────────────────────────────
 
     def compute_pgsi(self, sub_scores: Dict[str, float]) -> float:
-        """PGSI = Σ wᵢ · Sᵢ"""
+        """PGSI = Σ wᵢ · Sᵢ (only 3 active features)"""
         pgsi = sum(
             self.weights[key] * sub_scores[key] for key in self.weights
         )
@@ -124,11 +104,11 @@ class PGSIScorer:
 
     @staticmethod
     def classify_severity(pgsi: float) -> str:
-        if pgsi <= 25:
+        if pgsi <= 33:
             return "Normal"
-        elif pgsi <= 50:
+        elif pgsi <= 58:
             return "Mild"
-        elif pgsi <= 75:
+        elif pgsi <= 78:
             return "Moderate"
         else:
             return "Severe"

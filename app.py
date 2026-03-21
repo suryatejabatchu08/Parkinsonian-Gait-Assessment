@@ -96,23 +96,6 @@ page = st.sidebar.radio(
 
 st.sidebar.markdown("---")
 
-# Custom weights upload
-st.sidebar.markdown("**⚙️ Custom Weights**")
-uploaded_weights = st.sidebar.file_uploader(
-    "Upload weights JSON", type=["json"], key="weights_upload",
-    help="Upload a JSON file with optimized PGSI weights (keys: stride, posture, symmetry, variability, armswing)",
-)
-custom_weights = None
-if uploaded_weights is not None:
-    try:
-        custom_weights = json.loads(uploaded_weights.read())
-        st.sidebar.success(f"✅ Custom weights loaded")
-    except (json.JSONDecodeError, Exception) as e:
-        st.sidebar.error(f"Invalid weights file: {e}")
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("**PGSI v1.0** — Group 2, Section J")
-
 
 # ═════════════════════════════════════════════
 # PAGE 1: Upload
@@ -192,7 +175,7 @@ if page == "📤 Upload":
 
                 # Stage 4: PGSI Scoring
                 progress.progress(80, "Stage 4/5: Computing PGSI score...")
-                scorer = PGSIScorer(weights=custom_weights)
+                scorer = PGSIScorer()
                 result = scorer.assess(features)
                 st.session_state.pgsi_result = result
 
@@ -273,13 +256,11 @@ elif page == "📊 Feature Analysis":
         result = st.session_state.pgsi_result
 
         # Summary metrics
-        cols = st.columns(5)
+        cols = st.columns(3)
         metric_data = [
-            ("Stride Length", f"{features.mean_stride_length:.3f}", "normalized"),
-            ("Posture Angle", f"{features.mean_posture_angle:.1f}°", "trunk tilt"),
-            ("Symmetry Index", f"{features.mean_symmetry_index:.1f}%", "L-R asymmetry"),
-            ("Timing CV", f"{features.step_timing_cv:.1f}%", "variability"),
-            ("Arm Swing", f"{features.mean_arm_swing:.1f}°", "excursion"),
+            ("Stride Length", f"{features.mean_stride_length:.3f}", "normalized by leg length"),
+            ("Posture Angle", f"{features.mean_posture_angle:.1f}°", "forward trunk tilt"),
+            ("Timing CV", f"{features.step_timing_cv:.1f}%", "step timing variability"),
         ]
         for col, (label, value, help_text) in zip(cols, metric_data):
             col.metric(label, value, help=help_text)
@@ -489,7 +470,7 @@ elif page == "📈 Longitudinal":
                 "date": m_date,
                 "pgsi": m_pgsi,
                 "severity": severity,
-                "sub_scores": {"stride": 0, "posture": 0, "symmetry": 0, "variability": 0, "armswing": 0},
+                "sub_scores": {"stride": 0, "posture": 0, "variability": 0, "symmetry": 0, "armswing": 0},
             })
             _save_sessions_history(st.session_state.sessions_history)
             st.success("Session added!")

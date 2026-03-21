@@ -1,0 +1,5 @@
+group,n,stride_length_sub_mean,stride_length_sub_std,posture_angle_sub_mean,posture_angle_sub_std,step_timing_cv_sub_mean,step_timing_cv_sub_std,pgsi_mean,pgsi_std,gait_symmetry_sub_mean,gait_symmetry_sub_std,arm_swing_sub_mean,arm_swing_sub_std,stride_length_raw_mean,stride_length_raw_std,posture_angle_raw_mean,posture_angle_raw_std,step_timing_cv_raw_mean,step_timing_cv_raw_std,gait_symmetry_raw_mean,gait_symmetry_raw_std,arm_swing_raw_mean,arm_swing_raw_std
+Normal,59,14.12,16.54,3.02,4.15,70.86,20.57,31.2,11.31,0.0,0.0,0.0,0.0,0.53,0.14,5.71,1.79,65.88,16.53,79.61,49.34,59.41,24.38
+Mild,12,76.99,10.65,2.24,3.14,80.96,15.26,59.69,8.42,0.0,0.0,0.0,0.0,0.22,0.05,4.9,1.9,72.02,11.2,57.42,40.32,83.43,30.91
+Moderate,14,84.84,8.66,2.08,3.26,85.15,14.42,64.26,4.9,0.0,0.0,0.0,0.0,0.18,0.04,5.3,1.53,76.62,12.7,49.65,20.87,76.95,26.41
+Severe,2,99.61,0.55,11.4,2.59,75.66,15.92,69.17,6.0,0.0,0.0,0.0,0.0,0.12,0.0,8.99,0.91,67.96,11.14,27.3,14.62,95.06,3.39

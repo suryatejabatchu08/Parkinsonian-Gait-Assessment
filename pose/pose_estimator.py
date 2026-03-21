@@ -1,22 +1,14 @@
 """
 pose_estimator.py — Stage 2: Markerless Pose Estimation
 
-Uses MediaPipe PoseLandmarker (Tasks API) to extract 33 full-body keypoints per frame.
-Compatible with mediapipe >= 0.10.9 which removed the legacy mp.solutions API.
-
-Model file required: data/pose_landmarker.task
-Download: https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker
+Uses mp.solutions.pose (legacy Solutions API) for 33 full-body keypoints per frame.
+Requires mediapipe==0.10.14 (last version with solutions API).
+No external model file download needed.
 """
 
 import cv2
 import numpy as np
 import mediapipe as mp
-from mediapipe.tasks.python import BaseOptions
-from mediapipe.tasks.python.vision import (
-    PoseLandmarker,
-    PoseLandmarkerOptions,
-    RunningMode,
-)
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 
@@ -27,7 +19,7 @@ from config import (
     MEDIAPIPE_MIN_TRACKING_CONFIDENCE,
     VISIBILITY_THRESHOLD,
     LANDMARKS,
-    POSE_MODEL_PATH,
+    REQUIRED_LANDMARKS,
 )
 
 
@@ -65,7 +57,7 @@ class KeypointFrame:
     def get_xy(self, name: str) -> Optional[Tuple[float, float]]:
         """Return (x, y) for named landmark, or None if not visible."""
         lm = self.landmarks.get(name)
-        if lm is None or lm[3] < VISIBILITY_THRESHOLD:
+        if lm is None or lm[3] < 0.05:
             return None
         return (lm[0], lm[1])
 
@@ -74,50 +66,24 @@ class KeypointFrame:
         return lm is not None and lm[3] >= VISIBILITY_THRESHOLD
 
 
-def _download_model_if_needed(model_path: str) -> str:
-    """Download the PoseLandmarker model if it doesn't exist locally."""
-    if os.path.isfile(model_path):
-        return model_path
-
-    os.makedirs(os.path.dirname(model_path), exist_ok=True)
-    url = (
-        "https://storage.googleapis.com/mediapipe-models/"
-        "pose_landmarker/pose_landmarker_heavy/float16/latest/"
-        "pose_landmarker_heavy.task"
-    )
-    print(f"[PGSI] Downloading PoseLandmarker model to {model_path} ...")
-    import urllib.request
-    urllib.request.urlretrieve(url, model_path)
-    print("[PGSI] Model downloaded successfully.")
-    return model_path
-
-
 class PoseEstimator:
-    """MediaPipe PoseLandmarker (Tasks API) wrapper for PGSI keypoint extraction."""
+    """MediaPipe mp.solutions.pose wrapper for PGSI keypoint extraction."""
 
     def __init__(
         self,
         static_image_mode: bool = False,
-        model_path: str = POSE_MODEL_PATH,
+        model_path: str = "",
         min_detection_confidence: float = MEDIAPIPE_MIN_DETECTION_CONFIDENCE,
         min_tracking_confidence: float = MEDIAPIPE_MIN_TRACKING_CONFIDENCE,
         num_poses: int = 1,
     ):
-        # Auto-download model if not present
-        model_path = _download_model_if_needed(model_path)
-
-        running_mode = RunningMode.IMAGE if static_image_mode else RunningMode.VIDEO
-
-        options = PoseLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=model_path),
-            running_mode=running_mode,
-            num_poses=num_poses,
-            min_pose_detection_confidence=min_detection_confidence,
-            min_pose_presence_confidence=min_tracking_confidence,
+        self.pose = mp.solutions.pose.Pose(
+            static_image_mode=static_image_mode,
+            model_complexity=0,          # fastest model
+            smooth_landmarks=True,
+            min_detection_confidence=min_detection_confidence,
             min_tracking_confidence=min_tracking_confidence,
         )
-        self.landmarker = PoseLandmarker.create_from_options(options)
-        self.running_mode = running_mode
         self._frame_timestamp_ms = 0
 
     # ── core methods ──────────────────────────────────
@@ -126,31 +92,24 @@ class PoseEstimator:
         """Run pose estimation on a single BGR frame.
         Returns KeypointFrame or None if no pose detected."""
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        results = self.pose.process(rgb)
 
-        if self.running_mode == RunningMode.IMAGE:
-            results = self.landmarker.detect(mp_image)
-        else:
-            # VIDEO mode requires monotonically increasing timestamps
-            self._frame_timestamp_ms += 33  # ~30 FPS
-            results = self.landmarker.detect_for_video(mp_image, self._frame_timestamp_ms)
-
-        if not results.pose_landmarks or len(results.pose_landmarks) == 0:
+        if not results.pose_landmarks:
             return None
 
-        pose_lms = results.pose_landmarks[0]  # First (and usually only) person
+        lms = results.pose_landmarks.landmark
+
+        # Quality filter: only require shoulders + hips (sagittal view occludes far-side limbs)
+        if any(lms[i].visibility < VISIBILITY_THRESHOLD for i in REQUIRED_LANDMARKS):
+            return None
 
         landmarks_dict: Dict[str, Tuple[float, float, float, float]] = {}
         visibility_sum = 0.0
 
         for name, idx in LANDMARKS.items():
-            lm = pose_lms[idx]
-            # Tasks API uses .visibility and .presence attributes
-            vis = getattr(lm, 'visibility', None)
-            if vis is None:
-                vis = getattr(lm, 'presence', 0.5)
-            landmarks_dict[name] = (lm.x, lm.y, lm.z, float(vis))
-            visibility_sum += float(vis)
+            lm = lms[idx]
+            landmarks_dict[name] = (lm.x, lm.y, lm.z, float(lm.visibility))
+            visibility_sum += float(lm.visibility)
 
         avg_vis = visibility_sum / len(LANDMARKS) if LANDMARKS else 0.0
 
@@ -158,7 +117,7 @@ class PoseEstimator:
             frame_index=frame_index,
             landmarks=landmarks_dict,
             avg_visibility=avg_vis,
-            raw_landmarks=pose_lms,
+            raw_landmarks=lms,
         )
 
     def process_video_frames(self, frames: List[np.ndarray]) -> List[Optional[KeypointFrame]]:
@@ -185,8 +144,7 @@ class PoseEstimator:
         keypoint_frame: KeypointFrame,
         draw_connections: bool = True,
     ) -> np.ndarray:
-        """Draw pose landmarks on a BGR frame and return annotated copy.
-        Uses OpenCV drawing (mp.solutions.drawing_utils was removed in newer mediapipe)."""
+        """Draw pose landmarks on a BGR frame and return annotated copy."""
         annotated = frame.copy()
         h, w = annotated.shape[:2]
 
@@ -197,7 +155,7 @@ class PoseEstimator:
 
         # Draw keypoints as green circles
         for name, (x, y, z, vis) in landmarks.items():
-            if vis >= VISIBILITY_THRESHOLD:
+            if vis >= 0.05:
                 px = int(x * w)
                 py = int(y * h)
                 cv2.circle(annotated, (px, py), 4, (0, 255, 0), -1)
@@ -208,8 +166,8 @@ class PoseEstimator:
                 lm_a = landmarks.get(name_a)
                 lm_b = landmarks.get(name_b)
                 if (lm_a and lm_b and
-                        lm_a[3] >= VISIBILITY_THRESHOLD and
-                        lm_b[3] >= VISIBILITY_THRESHOLD):
+                        lm_a[3] >= 0.05 and
+                        lm_b[3] >= 0.05):
                     pt_a = (int(lm_a[0] * w), int(lm_a[1] * h))
                     pt_b = (int(lm_b[0] * w), int(lm_b[1] * h))
                     cv2.line(annotated, pt_a, pt_b, (255, 0, 0), 2)
@@ -247,7 +205,7 @@ class PoseEstimator:
     # ── cleanup ──────────────────────────────────────
 
     def close(self):
-        self.landmarker.close()
+        self.pose.close()
 
     def __enter__(self):
         return self
