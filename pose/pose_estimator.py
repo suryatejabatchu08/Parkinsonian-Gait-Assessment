@@ -5,6 +5,19 @@ Uses mp.solutions.pose (legacy Solutions API) for 33 full-body keypoints per fra
 Requires mediapipe==0.10.14 (last version with solutions API).
 No external model file download needed.
 """
+import os
+import tempfile
+
+# Streamlit Cloud has a read-only venv — mediapipe cannot write model
+# files to its package directory. Redirect cache to /tmp before import.
+def _configure_mediapipe_tmp():
+    tmp_dir = os.path.join(tempfile.gettempdir(), "mediapipe_models")
+    os.makedirs(tmp_dir, exist_ok=True)
+    os.environ.setdefault("MEDIAPIPE_CACHE_DIR", tmp_dir)
+    os.environ.setdefault("HOME", tempfile.gettempdir())
+
+_configure_mediapipe_tmp()
+
 
 import cv2
 import numpy as np
