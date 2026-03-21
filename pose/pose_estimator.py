@@ -7,59 +7,39 @@ No external model file download needed.
 """
 import os
 import shutil
-import tempfile
 
 def _patch_mediapipe_model():
     """
-    Streamlit Cloud venv is read-only — mediapipe cannot download the
-    .tflite model at runtime. We pre-bundle the model in data/ and copy
-    it to the expected mediapipe package location at startup.
+    Write the bundled .tflite model directly into the mediapipe package
+    directory before Pose() is called. Streamlit Cloud mounts the venv
+    as writable at /home/adminuser/venv so the copy succeeds at runtime
+    even though the file wasn't there at install time.
     """
     import mediapipe
+
     target = os.path.join(
         os.path.dirname(mediapipe.__file__),
         "modules", "pose_landmark", "pose_landmark_lite.tflite"
     )
 
-    # If the file already exists and is non-empty, nothing to do
+    # Already there and non-empty — nothing to do
     if os.path.isfile(target) and os.path.getsize(target) > 0:
+        print(f"[PGSI] Model already present: {target}")
         return
 
-    # Find our bundled copy (relative to this file)
+    # Find bundled copy relative to this file
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     bundled   = os.path.join(repo_root, "data", "pose_landmark_lite.tflite")
 
     if not os.path.isfile(bundled):
         raise FileNotFoundError(
-            f"Bundled model not found at {bundled}. "
-            "Please copy pose_landmark_lite.tflite into the data/ folder."
+            f"[PGSI] Bundled model not found at: {bundled}\n"
+            "Copy pose_landmark_lite.tflite into the data/ folder of your repo."
         )
 
-    # Try to copy directly into the package dir
-    try:
-        os.makedirs(os.path.dirname(target), exist_ok=True)
-        shutil.copy2(bundled, target)
-        return
-    except PermissionError:
-        pass
-
-    # Package dir is read-only — symlink via /tmp instead
-    tmp_dir  = os.path.join(tempfile.gettempdir(), "mediapipe", "modules", "pose_landmark")
-    os.makedirs(tmp_dir, exist_ok=True)
-    tmp_path = os.path.join(tmp_dir, "pose_landmark_lite.tflite")
-    shutil.copy2(bundled, tmp_path)
-
-    # Monkey-patch mediapipe's download_utils so it returns our copy
-    import mediapipe.python.solutions.download_utils as du
-    _orig = du.download_oss_model
-
-    def _patched(model_path):
-        fname = os.path.basename(model_path)
-        if fname == "pose_landmark_lite.tflite":
-            return   # already handled — skip download entirely
-        return _orig(model_path)
-
-    du.download_oss_model = _patched
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    shutil.copy2(bundled, target)
+    print(f"[PGSI] Model copied to: {target}")
 
 _patch_mediapipe_model()
 
