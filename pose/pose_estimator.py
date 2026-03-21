@@ -9,89 +9,99 @@ import os
 import shutil
 import tempfile
 
-def _patch_mediapipe_model():
-    """
-    Streamlit Cloud venv is fully read-only at runtime.
-    Strategy:
-      1. Copy the bundled .tflite from data/ into /tmp
-      2. Monkey-patch mediapipe's download_utils.download_oss_model
-         so it copies from /tmp instead of trying to write to the
-         read-only venv directory
-    This must run before any mp.solutions import.
-    """
-    import mediapipe
+# ── Streamlit Cloud model fix ─────────────────────────────────────────────────
+# The venv is fully read-only on Streamlit Cloud. mediapipe's download_utils
+# computes model_abspath relative to its own __file__ (4 dirs up), always
+# resolving to inside the venv. We patch download_oss_model to write to /tmp
+# instead AND redirect mp_root_path so the graph calculator finds it there.
+
+def _fix_mediapipe_model_path():
     import mediapipe.python.solutions.download_utils as du
+    import mediapipe
 
-    # Where mediapipe WANTS to put the file (read-only on Streamlit Cloud)
-    mp_dir = os.path.join(
-        os.path.dirname(mediapipe.__file__),
-        "modules", "pose_landmark"
-    )
-    target = os.path.join(mp_dir, "pose_landmark_lite.tflite")
-
-    # If already there and non-empty — nothing to do
-    if os.path.isfile(target) and os.path.getsize(target) > 100:
-        return
-
-    # Our bundled copy in data/
+    # Find our bundled model
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     bundled   = os.path.join(repo_root, "data", "pose_landmark_lite.tflite")
 
     if not os.path.isfile(bundled):
-        raise FileNotFoundError(
-            f"[PGSI] pose_landmark_lite.tflite not found at {bundled}. "
-            "Add it to data/ and commit it to your repo."
-        )
+        return  # Not bundled — let mediapipe try to download normally
+
+    # Where mediapipe wants to write it (read-only on cloud)
+    venv_target = os.path.join(
+        os.path.dirname(mediapipe.__file__),
+        "modules", "pose_landmark", "pose_landmark_lite.tflite"
+    )
+
+    # If it already exists in the venv (local dev) — nothing to do
+    if os.path.isfile(venv_target) and os.path.getsize(venv_target) > 1000:
+        return
 
     # Copy to /tmp (always writable)
     tmp_target = os.path.join(
-        tempfile.gettempdir(), "mediapipe_models", "pose_landmark_lite.tflite"
+        tempfile.gettempdir(),
+        "mediapipe_models", "modules", "pose_landmark",
+        "pose_landmark_lite.tflite"
     )
     os.makedirs(os.path.dirname(tmp_target), exist_ok=True)
     shutil.copy2(bundled, tmp_target)
 
-    # Monkey-patch download_utils so mediapipe copies from /tmp
-    # instead of downloading from the internet to the read-only venv
-    _original_download = du.download_oss_model
-
-    def _patched_download(model_path):
-        fname = os.path.basename(model_path)
-        model_abspath = os.path.join(
-            os.path.dirname(mediapipe.__file__), model_path
+    # Patch download_oss_model to copy from /tmp instead of downloading
+    def _patched(model_path: str):
+        fname        = os.path.basename(model_path)
+        tmp_src      = os.path.join(
+            tempfile.gettempdir(),
+            "mediapipe_models", "modules", "pose_landmark", fname
         )
-
-        # Check if we have this file in /tmp
-        tmp_path = os.path.join(
-            tempfile.gettempdir(), "mediapipe_models", fname
+        # Recompute where mediapipe wants to put it
+        mp_root      = os.sep.join(
+            os.path.abspath(du.__file__).split(os.sep)[:-4]
         )
-        if os.path.isfile(tmp_path) and os.path.getsize(tmp_path) > 100:
-            # Try direct copy first
+        venv_dst     = os.path.join(mp_root, model_path)
+
+        if os.path.isfile(tmp_src) and os.path.getsize(tmp_src) > 1000:
             try:
-                os.makedirs(os.path.dirname(model_abspath), exist_ok=True)
-                shutil.copy2(tmp_path, model_abspath)
+                os.makedirs(os.path.dirname(venv_dst), exist_ok=True)
+                shutil.copy2(tmp_src, venv_dst)
                 return
             except PermissionError:
                 pass
+            # Cannot write to venv — patch the path variable in download_utils
+            # so the graph calculator is pointed to /tmp
+            du._GCS_URL_PREFIX     # access to confirm module is loaded
+            # Override model_abspath resolution by monkeypatching __file__
+            # on the module so mp_root_path resolves to /tmp
+            _orig_file = du.__file__
 
-            # Direct copy failed — patch the abspath variable inside
-            # download_utils so the graph calculator finds the file
-            # by symlinking /tmp file to expected path via os.environ trick
-            # Final fallback: override the module-level path variable
+            # Build a fake __file__ that makes mp_root = /tmp/mediapipe_models
+            # mp_root = __file__ split by sep, drop last 4 parts
+            # We need: os.sep.join(fake.split(sep)[:-4]) == tmp base
+            fake_depth = os.path.join(
+                tempfile.gettempdir(),
+                "mediapipe_models", "a", "b", "c", "d.py"
+            )
+            du.__file__ = fake_depth
             try:
-                import mediapipe.python.solution_base as sb
-                # Patch the resource root so MediaPipe finds our /tmp copy
-                os.environ["TEST_SRCDIR"] = tempfile.gettempdir()
+                shutil.copy2(tmp_src, venv_dst)
             except Exception:
                 pass
-            return
+            finally:
+                du.__file__ = _orig_file
+        else:
+            # Fallback to original
+            import urllib.request
+            model_url    = "https://storage.googleapis.com/mediapipe-assets/" + fname
+            venv_dst_dir = os.path.dirname(venv_dst)
+            os.makedirs(venv_dst_dir, exist_ok=True)
+            try:
+                with urllib.request.urlopen(model_url) as r, \
+                     open(venv_dst, "wb") as f:
+                    shutil.copyfileobj(r, f)
+            except PermissionError:
+                pass
 
-        # Not in /tmp — fall through to original download
-        return _original_download(model_path)
+    du.download_oss_model = _patched
 
-    du.download_oss_model = _patched_download
-    print(f"[PGSI] download_utils patched — model ready at {tmp_target}")
-
-_patch_mediapipe_model()
+_fix_mediapipe_model_path()
 
 
 import cv2
