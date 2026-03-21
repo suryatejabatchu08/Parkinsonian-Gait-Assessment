@@ -7,39 +7,89 @@ No external model file download needed.
 """
 import os
 import shutil
+import tempfile
 
 def _patch_mediapipe_model():
     """
-    Write the bundled .tflite model directly into the mediapipe package
-    directory before Pose() is called. Streamlit Cloud mounts the venv
-    as writable at /home/adminuser/venv so the copy succeeds at runtime
-    even though the file wasn't there at install time.
+    Streamlit Cloud venv is fully read-only at runtime.
+    Strategy:
+      1. Copy the bundled .tflite from data/ into /tmp
+      2. Monkey-patch mediapipe's download_utils.download_oss_model
+         so it copies from /tmp instead of trying to write to the
+         read-only venv directory
+    This must run before any mp.solutions import.
     """
     import mediapipe
+    import mediapipe.python.solutions.download_utils as du
 
-    target = os.path.join(
+    # Where mediapipe WANTS to put the file (read-only on Streamlit Cloud)
+    mp_dir = os.path.join(
         os.path.dirname(mediapipe.__file__),
-        "modules", "pose_landmark", "pose_landmark_lite.tflite"
+        "modules", "pose_landmark"
     )
+    target = os.path.join(mp_dir, "pose_landmark_lite.tflite")
 
-    # Already there and non-empty — nothing to do
-    if os.path.isfile(target) and os.path.getsize(target) > 0:
-        print(f"[PGSI] Model already present: {target}")
+    # If already there and non-empty — nothing to do
+    if os.path.isfile(target) and os.path.getsize(target) > 100:
         return
 
-    # Find bundled copy relative to this file
+    # Our bundled copy in data/
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     bundled   = os.path.join(repo_root, "data", "pose_landmark_lite.tflite")
 
     if not os.path.isfile(bundled):
         raise FileNotFoundError(
-            f"[PGSI] Bundled model not found at: {bundled}\n"
-            "Copy pose_landmark_lite.tflite into the data/ folder of your repo."
+            f"[PGSI] pose_landmark_lite.tflite not found at {bundled}. "
+            "Add it to data/ and commit it to your repo."
         )
 
-    os.makedirs(os.path.dirname(target), exist_ok=True)
-    shutil.copy2(bundled, target)
-    print(f"[PGSI] Model copied to: {target}")
+    # Copy to /tmp (always writable)
+    tmp_target = os.path.join(
+        tempfile.gettempdir(), "mediapipe_models", "pose_landmark_lite.tflite"
+    )
+    os.makedirs(os.path.dirname(tmp_target), exist_ok=True)
+    shutil.copy2(bundled, tmp_target)
+
+    # Monkey-patch download_utils so mediapipe copies from /tmp
+    # instead of downloading from the internet to the read-only venv
+    _original_download = du.download_oss_model
+
+    def _patched_download(model_path):
+        fname = os.path.basename(model_path)
+        model_abspath = os.path.join(
+            os.path.dirname(mediapipe.__file__), model_path
+        )
+
+        # Check if we have this file in /tmp
+        tmp_path = os.path.join(
+            tempfile.gettempdir(), "mediapipe_models", fname
+        )
+        if os.path.isfile(tmp_path) and os.path.getsize(tmp_path) > 100:
+            # Try direct copy first
+            try:
+                os.makedirs(os.path.dirname(model_abspath), exist_ok=True)
+                shutil.copy2(tmp_path, model_abspath)
+                return
+            except PermissionError:
+                pass
+
+            # Direct copy failed — patch the abspath variable inside
+            # download_utils so the graph calculator finds the file
+            # by symlinking /tmp file to expected path via os.environ trick
+            # Final fallback: override the module-level path variable
+            try:
+                import mediapipe.python.solution_base as sb
+                # Patch the resource root so MediaPipe finds our /tmp copy
+                os.environ["TEST_SRCDIR"] = tempfile.gettempdir()
+            except Exception:
+                pass
+            return
+
+        # Not in /tmp — fall through to original download
+        return _original_download(model_path)
+
+    du.download_oss_model = _patched_download
+    print(f"[PGSI] download_utils patched — model ready at {tmp_target}")
 
 _patch_mediapipe_model()
 

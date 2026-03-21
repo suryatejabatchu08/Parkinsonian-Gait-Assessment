@@ -35,7 +35,9 @@ from visualization.charts import (
     create_correlation_heatmap,
 )
 from reporting.report_generator import ReportGenerator
-
+@st.cache_resource
+def get_pose_estimator():
+    return PoseEstimator()
 # ─────────────────────────────────────────────
 # Page config
 # ─────────────────────────────────────────────
@@ -160,7 +162,7 @@ if page == "📤 Upload":
 
                 # Stage 2: Pose Estimation
                 progress.progress(30, "Stage 2/5: Estimating pose...")
-                estimator = PoseEstimator()
+                estimator = get_pose_estimator()
                 keypoints = estimator.process_video_frames(frames)
                 st.session_state.keypoints = keypoints
 
