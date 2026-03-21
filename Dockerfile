@@ -2,11 +2,11 @@ FROM python:3.11-slim
 
 # System dependencies for OpenCV
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -17,7 +17,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download mediapipe model during build
-# At build time we have full write permissions — model lands in the right place
+# At build time we have full write permissions
 RUN python -c "\
 import mediapipe as mp; \
 p = mp.solutions.pose.Pose(model_complexity=0); \
