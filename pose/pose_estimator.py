@@ -71,28 +71,57 @@ class KeypointFrame:
 class PoseEstimator:
     """MediaPipe mp.solutions.pose wrapper for PGSI keypoint extraction."""
 
-    def __init__(
-        self,
-        static_image_mode: bool = False,
-        model_path: str = "",
-        min_detection_confidence: float = MEDIAPIPE_MIN_DETECTION_CONFIDENCE,
-        min_tracking_confidence: float = MEDIAPIPE_MIN_TRACKING_CONFIDENCE,
-        num_poses: int = 1,
-    ):
-        self.pose = mp.solutions.pose.Pose(
-            static_image_mode=static_image_mode,
-            model_complexity=0,          # fastest model
-            smooth_landmarks=True,
-            min_detection_confidence=min_detection_confidence,
-            min_tracking_confidence=min_tracking_confidence,
-        )
+    def __init__(self, static_image_mode=False, model_path="",
+             min_detection_confidence=0.4,
+             min_tracking_confidence=0.4,
+             num_poses=1):
+        import mediapipe as mp
+        self._static = static_image_mode
+        self._det_conf = min_detection_confidence
+        self._track_conf = min_tracking_confidence
+        self._init_pose()
         self._frame_timestamp_ms = 0
+
+    def _init_pose(self):
+        """Initialize or reinitialize the MediaPipe Pose graph."""
+        import mediapipe as mp
+        self.pose = mp.solutions.pose.Pose(
+            static_image_mode=self._static,
+            model_complexity=0,
+            smooth_landmarks=True,
+            min_detection_confidence=self._det_conf,
+            min_tracking_confidence=self._track_conf,
+        )
+
+    def _is_graph_alive(self):
+        """Check if the internal MediaPipe graph is still valid."""
+        try:
+            return self.pose._graph is not None
+        except Exception:
+            return False
+
+    def process_video_frames(self, frames):
+        """Process a list of frames, reinitializing pose if graph died."""
+        # Reinitialize if graph was destroyed between Streamlit reruns
+        if not self._is_graph_alive():
+            self._init_pose()
+            self._frame_timestamp_ms = 0
+
+        keypoints = []
+        for i, frame in enumerate(frames):
+            kf = self.process_frame(frame, frame_index=i)
+            keypoints.append(kf)
+        return keypoints
 
     # ── core methods ──────────────────────────────────
 
     def process_frame(self, frame: np.ndarray, frame_index: int = 0) -> Optional[KeypointFrame]:
         """Run pose estimation on a single BGR frame.
         Returns KeypointFrame or None if no pose detected."""
+        if not self._is_graph_alive():
+            self._init_pose()
+            self._frame_timestamp_ms = 0
+        
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = self.pose.process(rgb)
 

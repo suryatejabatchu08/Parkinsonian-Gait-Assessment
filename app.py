@@ -35,9 +35,19 @@ from visualization.charts import (
     create_correlation_heatmap,
 )
 from reporting.report_generator import ReportGenerator
-@st.cache_resource
 def get_pose_estimator():
-    return PoseEstimator()
+    if "pose_estimator" not in st.session_state:
+        st.session_state.pose_estimator = PoseEstimator()
+    estimator = st.session_state.pose_estimator
+    # Reinitialize if graph died
+    try:
+        _ = estimator.pose._graph
+        if estimator.pose._graph is None:
+            raise ValueError
+    except Exception:
+        st.session_state.pose_estimator = PoseEstimator()
+        estimator = st.session_state.pose_estimator
+    return estimator
 # ─────────────────────────────────────────────
 # Page config
 # ─────────────────────────────────────────────
@@ -181,7 +191,6 @@ if page == "📤 Upload":
                 result = scorer.assess(features)
                 st.session_state.pgsi_result = result
 
-                estimator.close()
 
                 # Stage 5: Done
                 progress.progress(100, "✅ Analysis complete!")
@@ -229,13 +238,14 @@ elif page == "🦴 Pose Viewer":
             st.subheader("Skeleton Overlay")
             kf = keypoints[frame_idx]
             if kf is not None:
-                estimator = PoseEstimator(static_image_mode=True)
+                # Use the cached estimator — do NOT create a new one
+                # and do NOT call .close()
+                estimator = get_pose_estimator()
                 annotated = estimator.draw_skeleton(frames[frame_idx], kf)
                 annotated_rgb = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
                 st.image(annotated_rgb, use_container_width=True)
-                estimator.close()
+                # NO estimator.close() here
 
-                # Show keypoint confidence
                 st.markdown(f"**Average Visibility:** {kf.avg_visibility:.2f}")
                 with st.expander("Keypoint Details"):
                     for name, (x, y, z, vis) in kf.landmarks.items():
